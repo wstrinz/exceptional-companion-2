@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name        New script fallenlondon.com
+// @name        Exceptional Companion
 // @namespace   Violentmonkey Scripts
 // @match       https://www.fallenlondon.com/
 // @grant       none
@@ -486,6 +486,66 @@ boxGrind = async () => {
   await tryUntilSuccess(11133);
 };
 
+contraptionGrind = async () => {
+  // Missing Woman
+  await waitForBranchAndGo(19513);
+  await waitForBranchAndGo(8715);
+  await waitForOnwardsAndGo();
+
+  // Your Own Eyes x4
+  await waitForBranchAndGo(19514);
+  await tryUntilSuccess(8718);
+  await waitForBranchAndGo(19514);
+  await tryUntilSuccess(8718);
+  await waitForBranchAndGo(19514);
+  await tryUntilSuccess(8718);
+
+  // Who is she
+  await waitForBranchAndGo(19517);
+  await waitForBranchAndGo(8723);
+  await waitForOnwardsAndGo();
+
+  // Professor x5
+  await waitForBranchAndGo(19520);
+  await tryUntilSuccess(8727);
+  await waitForBranchAndGo(19520);
+  await tryUntilSuccess(8727);
+  await waitForBranchAndGo(19520);
+  await tryUntilSuccess(8727);
+  await waitForBranchAndGo(19520);
+  await tryUntilSuccess(8727);
+  await waitForBranchAndGo(19520);
+  await tryUntilSuccess(8727);
+
+  // The End
+  await waitForBranchAndGo(19524);
+  await waitForBranchAndGo(8713);
+};
+
+suspicionGrind = async () => {
+  const branchPriorities = [
+    [173620, 4877], // Confound the constables
+    [173617], // Burgle Jewelers - Moon-pearl
+    [173624], // Christen Jack - Moon-Pearl
+    [173619], // Burgle Glim - Glim
+    [173614], // Case a Jewelers - Hints
+  ];
+
+  const foundBranches = branchPriorities.find((branches) =>
+    document.querySelector(`div[data-branch-id="${branches[0]}"]`)
+  );
+
+  if (foundBranches) {
+    foundBranches.forEach(async (branch) => {
+      await waitForBranchAndGo(branch);
+    });
+  } else {
+    console.log("No branch found");
+  }
+
+  await waitForOnwardsAndGo();
+};
+
 const outfits = {
   exceptional_a: 3961918,
   hard_wearing: 105820,
@@ -822,8 +882,12 @@ window.startCardLoop = () => {
     { eventId: 11209, branchId: 6144 }, // Afternoon of good deeds
     { eventId: 22413, branchId: 10521 }, // Temptation of money
     { eventId: 11211, branchId: 6714 }, // Restorative
-    { eventId: 10135, branchId: 206992 }, // Bohemians
-    { eventId: 10147, branchId: 204817 }, // Great Game
+    // { eventId: 10135, branchId: 206992 }, // Bohemians
+    // { eventId: 10147, branchId: 204817 }, // Great Game
+    // { eventId: 10143, branchId: 30483 }, // Church
+    // { eventId: 21276, branchId: 204816 }, // Mole
+    { eventId: 11222, branchId: 7027 }, // Merry Gentleman
+    { eventId: 19455, branchId: 12345678 }, // You know her
   ]);
 };
 
@@ -918,8 +982,10 @@ createHelperEls = () => {
         <option value="grindAllMarked">Generic</option>
         <option value="heliconGrind">Helicon House</option>
         <option value="boxGrind">Affair of the Box</option>
+        <option value="contraptionGrind">Whirring Contraption</option>
         <option value="sharkGrind">Pinewood Shark</option>
         <option value="nightmareAssistGrind">Nightmares</option>
+        <option value="suspicionGrind">Suspicion</option>
       </select>
       <button class="button--primary" onclick="doGrind()">Grind</button>
 

@@ -217,7 +217,7 @@ function startCardLoop() {
     { eventId: 11209, branchId: 6144 }, // Afternoon of good deeds
     { eventId: 22413, branchId: 10521 }, // Temptation of money
     { eventId: 11211, branchId: 6714 }, // Restorative
-    { eventId: 10135, branchId: 206992 }, // Bohemians
+    // { eventId: 10135, branchId: 206992 }, // Bohemians
     { eventId: 10147, branchId: 204817 }, // Great Game
   ]);
 }
