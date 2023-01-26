@@ -522,7 +522,7 @@ contraptionGrind = async () => {
   await waitForBranchAndGo(8713);
 };
 
-suspicionGrind = async () => {
+suspicionGrindOnce = async () => {
   const branchPriorities = [
     [173620, 4877], // Confound the constables
     [173617], // Burgle Jewelers - Moon-pearl
@@ -542,8 +542,34 @@ suspicionGrind = async () => {
   } else {
     console.log("No branch found");
   }
+};
 
-  await waitForOnwardsAndGo();
+suspicionGrind = async () => {
+  const grindAmt = getGrindAmount();
+
+  console.log(`grinding suspicion ${grindAmt} times`);
+
+  for (let i = 0; i < grindAmt; i++) {
+    await suspicionGrindOnce();
+
+    await waitForJq("button:contains('Onwards')");
+
+    const susUpdate = jQuery(
+      'div.quality-update__body:contains("Suspicion")'
+    )[0];
+
+    if (susUpdate) {
+      if (
+        susUpdate.childNodes[0].innerText == "You've lost a quality: Suspicion."
+      ) {
+        console.log("No longer suspicious!");
+        return;
+      }
+    }
+
+    await waitForOnwardsAndGo();
+    await waitForJq("h1.heading");
+  }
 };
 
 const outfits = {
@@ -791,14 +817,7 @@ function firstDiscardableCard() {
         card.getAttribute("data-event-id")
       );
 
-      const reservedRegexes = [
-        /cheesemonger/i,
-        /a visit/i,
-        /whisper/i,
-        /game/i,
-        /mole/i,
-        /you know her/i,
-      ];
+      const reservedRegexes = [/cheesemonger/i];
       let matchesRegex = reservedRegexes.find((regex) =>
         card
           .querySelector('[role="button"]')
@@ -887,7 +906,6 @@ window.startCardLoop = () => {
     // { eventId: 10143, branchId: 30483 }, // Church
     // { eventId: 21276, branchId: 204816 }, // Mole
     { eventId: 11222, branchId: 7027 }, // Merry Gentleman
-    { eventId: 19455, branchId: 12345678 }, // You know her
   ]);
 };
 
@@ -920,6 +938,12 @@ grind = async (branchId, n) => {
 grindAll = async (branchId, grindAmt) => {
   window.localStorage.grindBranch = branchId;
 
+  grind(branchId, grindAmt);
+};
+
+getGrindAmount = () => {
+  let grindAmt = parseInt($("#grind-amount").val());
+
   let actionsBox = document.querySelector('img[aria-label="actions"]')
     .parentElement.parentElement;
   let actionsText = actionsBox.querySelector(
@@ -930,14 +954,13 @@ grindAll = async (branchId, grindAmt) => {
     grindAmt = parseInt(actionsText.match(/(\d+)\/\d+/)[1]);
   }
 
-  grind(branchId, grindAmt);
+  return grindAmt;
 };
 
 grindAllMarked = async () => {
   let markedBranchId = $("#grind-input").val();
-  let grindAmt = parseInt($("#grind-amount").val());
 
-  grindAll(markedBranchId, grindAmt);
+  grindAll(markedBranchId, getGrindAmount());
 };
 
 showBranches = () => {
