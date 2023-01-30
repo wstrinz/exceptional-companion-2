@@ -6,6 +6,8 @@
 // @version     1.0
 // @author      -
 // @description 12/31/2022, 1:23:13 PM
+// @require https://raw.githubusercontent.com/andrewplummer/Sugar/2.0.4/dist/sugar.js
+// @require https://raw.githubusercontent.com/andrewplummer/sugar-inflections/master/dist/sugar-inflections.js
 // ==/UserScript==
 
 // Exceptional Companion
@@ -774,6 +776,56 @@ async function watchForAndClickXpathButton(text) {
   }
 }
 
+// --------------------------------------------------------------
+// Wiki lookup
+// --------------------------------------------------------------
+
+async function lookupWiki(qualityEl) {
+  const item = qualityEl.querySelector("img").alt.match(/\d+ ([\w|\s]+)/);
+  const captureSplits = item[1].split(" ").filter((word) => word.length > 0);
+  const nWords = captureSplits.length;
+  const pluralWordIdx = Array.from(Array(nWords).keys()).find((word) =>
+    captureSplits[word].endsWith("s")
+  );
+  captureSplits[pluralWordIdx] = Sugar.String.singularize(
+    captureSplits[pluralWordIdx]
+  );
+
+  console.log("captureSplits", captureSplits);
+  const wikiIdentifier = captureSplits.join("_");
+
+  let wikiUrl = `https://fallenlondon.wiki/wiki/${wikiIdentifier}`;
+
+  const resp = await fetch(`https://corsanywhere.herokuapp.com/${wikiUrl}`);
+  const htmlText = await resp.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, "text/html");
+
+  const itemType = doc
+    .querySelector(".article-table.floatright th")
+    .textContent.match(/: (\w+)/)[1];
+
+  const grindGuideURL = `https://fallenlondon.wiki/wiki/${itemType}_Grinding_(Guide)#${wikiIdentifier}`;
+
+  document.querySelector(
+    "div.snippet"
+  ).innerHTML = `<iframe src='${grindGuideURL}'></iframe>`;
+}
+
+addQualityClickHandlers = () => {
+  Array.from(document.querySelectorAll("div.icon.quality-requirement"))
+    .filter(
+      (qualityEl) => !Array.from(qualityEl.classList).includes("icon--circular")
+    )
+    .forEach((qualityEl) => {
+      qualityEl.addEventListener("click", () => lookupWiki(qualityEl));
+    });
+};
+
+// --------------------------------------------------------------
+// Card automation
+// --------------------------------------------------------------
+
 async function waitUntilNextCard() {
   let lastTime;
   let timeUntilNextCard = getTimeUntilNextCard();
@@ -998,6 +1050,8 @@ createHelperEls = () => {
     <button class="button--primary" onclick="showBranches()">Show Branch IDs</button>
     <br>
     <button class="button--primary" onclick="showCards()">Show Card IDs</button>
+    <br>
+    <button class="button--primary" onclick="addQualityClickHandlers()">Add Item Helpers</button>
     <br>
     <button class="button--primary" onclick="startCardLoop()">Start Card Automation</button>
     <br>
