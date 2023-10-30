@@ -261,16 +261,15 @@ doResearch = async () => {
 };
 
 eolithFinish = async () => {
-  goBranch("321170");
-  await waitForJq("div[data-branch-id='236628']");
-  goBranch("236628");
-  await sleep(1200);
-  await waitForJq("button:contains('Onwards')");
-  onwards();
-  await waitForJq("button:contains('Go')");
-  $("button:contains('Go')")[0].click();
-  await waitForJq("button:contains('Onwards')");
-  onwards();
+  return new Promise(async (resolve) => {
+    await waitForBranchAndGo("321170");
+    await waitForBranchAndGo("236628");
+    await waitForOnwardsAndGo();
+    await waitForBranchAndGo("253496") // Tidy up
+    await waitForOnwardsAndGo();
+
+    resolve();
+  })
 };
 
 eolithBegin = async () => {
@@ -286,6 +285,48 @@ eolithLoop = async () => {
   await doResearch();
   await doResearch();
   eolithFinish();
+};
+
+const newEolithLoop = async () => {
+  console.log("Starting new eolith loop")
+  return new Promise(async (resolve) => {
+    await waitForJq("div[data-branch-id]");
+    await eolithBegin();
+    await drawCard();
+    await playCard("345727"); // Research Preparations
+    await waitForBranchAndGo("253505"); // Careful Preparations
+    await waitForOnwardsAndGo();
+    await checkForStudentGraduation();
+    await cardWatchLoop(researchEvents, 1);
+    await checkForStudentGraduation();
+    await cardWatchLoop(researchEvents, 1);
+    await checkForStudentGraduation();
+    await eolithFinish();
+
+    console.log("Finished new eolith loop")
+
+    resolve();
+  });
+};
+
+const checkForStudentGraduation = async () => {
+  return new Promise(async (resolve) => {
+    await waitForJq("div[data-branch-id]");
+    // currently just "Gifted"
+    const studentText = document.querySelector("div[data-branch-id='325278'] div.quality-requirement > div").getAttribute("aria-label")
+
+    if (studentText.includes("you have 5 in all")) {
+      await waitForBranchAndGo("325278"); // Graduate
+      await waitForBranchAndGo("239066");
+      await waitForOnwardsAndGo();
+
+      await waitForBranchAndGo("324414"); // Re-hire
+      await waitForBranchAndGo("238972");
+      await waitForOnwardsAndGo();
+    }
+
+    resolve();
+  });
 };
 
 researchTargets = {
@@ -532,6 +573,8 @@ suspicionGrindOnce = async () => {
     [173619], // Burgle Glim - Glim
     [173614], // Case a Jewelers - Hints
   ];
+
+  await waitForJq("div[data-branch-id]");
 
   const foundBranches = branchPriorities.find((branches) =>
     document.querySelector(`div[data-branch-id="${branches[0]}"]`)
@@ -796,7 +839,13 @@ async function lookupWiki(qualityEl) {
 
   let wikiUrl = `https://fallenlondon.wiki/wiki/${wikiIdentifier}`;
 
-  const resp = await fetch(`https://corsanywhere.herokuapp.com/${wikiUrl}`);
+  var headers = new Headers({
+    Authorization: `Basic ${btoa("user" + ":" + "passwd")}`,
+  });
+
+  const resp = await fetch(`https://cors-proxy-w8bx.onrender.com/${wikiUrl}`, {
+    headers: headers,
+  });
   const htmlText = await resp.text();
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlText, "text/html");
@@ -861,16 +910,16 @@ async function waitUntilNextCard() {
   }
 }
 
-function firstDiscardableCard() {
-  return Array.from(document.querySelectorAll(".hand__card-container")).filter(
+function findFirstDiscardableCard(reservedRegexes) {
+  // console.log("Finding first discardable card...", reservedRegexes);
+
+  return Array.from(document.querySelectorAll(".hand__card-container")).find(
     (card) => {
-      // Check if the card is not in the array of reserved event IDs
-      let isReservedEvent = [19455].includes(
+      const isReservedEvent = [19455].includes(
         card.getAttribute("data-event-id")
       );
 
-      const reservedRegexes = [/cheesemonger/i];
-      let matchesRegex = reservedRegexes.find((regex) =>
+      const matchesRegex = reservedRegexes.some((regex) =>
         card
           .querySelector('[role="button"]')
           .getAttribute("aria-label")
@@ -879,77 +928,101 @@ function firstDiscardableCard() {
 
       return !(isReservedEvent || matchesRegex);
     }
-  )[0];
+  );
 }
 
-async function cardWatchLoop(cardDefinitions) {
-  while (true) {
-    // Look for the first element with a data attribute matching one of the specified event IDs
-    let foundCard;
-    for (const event of cardDefinitions) {
-      let element = document.querySelector(
-        `[data-event-id="${event.eventId}"] > div > div > div`
-      );
-      if (element) {
-        console.log(
-          `Found element with data-event-id "${event.eventId}", clicking on it...`
+handleClickOnFoundCard = async (foundCard) => {
+  document
+    .querySelector(`[data-event-id="${foundCard.eventId}"] > div > div > div`)
+    .click();
+
+  await watchForAndClickXpathButton("play");
+
+  console.log(`Waiting for branch with ID ${foundCard.branchId}...`);
+
+  if (typeof foundCard.branchId === "object") {
+    await Promise.race(
+      foundCard.branchId.map((branchId) => waitForBranchAndGo(branchId))
+    );
+  } else {
+    await watchForElement(`[data-branch-id="${foundCard.branchId}"]`);
+    goBranch(foundCard.branchId);
+  }
+
+  await watchForAndClickXpathButton("Onwards");
+};
+
+async function handleDiscardableCard(reservedRegexes) {
+  const firstDiscardable = findFirstDiscardableCard(reservedRegexes);
+
+  if (firstDiscardable) {
+    const label = firstDiscardable
+      .querySelector('[role="button"]')
+      .getAttribute("aria-label");
+
+    console.log(`Discarding ${label}`);
+    firstDiscardable.querySelector("button").click();
+  } else {
+    console.log("Only undiscardable cards left 😥");
+  }
+}
+
+const researchEvents = [
+  { eventId: 345605, branchId: 253420 }, // Work with your equipment
+  { eventId: 344800, branchId: [252860, 252859] }, // Gifted student
+  { eventId: 242980, branchId: 185683 }, // Tomb Science
+  { eventId: 344378, branchId: 252571 }, // Eureka
+];
+
+async function cardWatchLoop(cardDefinitions, numLoops = 0) {
+  return new Promise(async (resolve) => {
+    let count = 0;
+
+    while (true) {
+      const foundCard = cardDefinitions.find((event) => {
+        const element = document.querySelector(
+          `[data-event-id="${event.eventId}"] > div > div > div`
         );
-        foundCard = event;
+        if (element) {
+          console.log(
+            `Found element with data-event-id "${event.eventId}", clicking on it...`
+          );
+          return true;
+        }
+        return false;
+      });
+
+      if (foundCard) {
+        await handleClickOnFoundCard(foundCard);
+      } else if (document.querySelector(".deck--empty")) {
+        await waitUntilNextCard();
+      } else if (document.querySelector(".card.card--empty")) {
+        await drawCard();
+      } else {
+        const reservedRegexes = cardDefinitions
+          .filter((event) => event.eventName)
+          .map((event) => new RegExp(event.eventName, "i"));
+
+        await handleDiscardableCard(reservedRegexes);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      count++;
+
+      if (numLoops > 0 && count > numLoops) {
+        console.log("Card loop done!");
         break;
       }
     }
 
-    // If an element is found, click on it
-    if (foundCard) {
-      document
-        .querySelector(
-          `[data-event-id="${foundCard.eventId}"] > div > div > div`
-        )
-        .click();
-
-      // Wait for the "play" button to appear and click it
-      await watchForAndClickXpathButton("play");
-
-      // Wait for the element with the matching branchId to appear and click it
-      console.log(`Waiting for branch with ID ${foundCard.branchId}...`);
-      await watchForElement(`[data-branch-id="${foundCard.branchId}"]`);
-      goBranch(foundCard.branchId);
-
-      // Wait for the "onwards" button to appear and click it
-      await watchForAndClickXpathButton("Onwards");
-    } else if (document.querySelector(".deck--empty")) {
-      await waitUntilNextCard();
-
-      // console.log("Done waiting");
-    } else {
-      // Check if the element with the "card card--empty" class is present
-      const emptyCardElement = document.querySelector(".card.card--empty");
-      if (emptyCardElement) {
-        await drawCard();
-      } else {
-        // Discard the first card, unless its event ID is 19455
-        let firstDiscardable = firstDiscardableCard();
-
-        if (firstDiscardable) {
-          const label = firstDiscardable
-            .querySelector('[role="button"]')
-            .getAttribute("aria-label");
-
-          console.log(`Discarding ${label}`);
-          firstDiscardable.querySelector("button").click();
-        } else {
-          console.log("Only undiscardable cards left 😥");
-        }
-      }
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
+    resolve();
+  });
 }
 
 window.startCardLoop = () => {
   // Start the loop, passing in the list of event IDs as a parameter
-  cardWatchLoop([
+  const fixedEvents = [
     { eventId: 11209, branchId: 6144 }, // Afternoon of good deeds
     { eventId: 22413, branchId: 10521 }, // Temptation of money
     { eventId: 11211, branchId: 6714 }, // Restorative
@@ -958,12 +1031,48 @@ window.startCardLoop = () => {
     // { eventId: 10143, branchId: 30483 }, // Church
     // { eventId: 21276, branchId: 204816 }, // Mole
     { eventId: 11222, branchId: 7027 }, // Merry Gentleman
-  ]);
+  ];
+
+  // get contents of input box, if its a number, use that for branchId. if its a string, use that for the event name
+  const events = $("#grind-input").val().split(",");
+  window.localStorage.grindBranch = events;
+
+  const watchType = $("#grind-select").val();
+
+  let watchEvents;
+
+  if (watchType == "researchGrind") {
+    watchEvents = researchEvents;
+  } else {
+    watchEvents = fixedEvents;
+  }
+
+  for (const event of events) {
+    if (parseInt(event)) {
+      watchEvents.push({ eventId: parseInt(event), branchId: 999999 });
+    } else {
+      watchEvents.push({ eventName: event, branchId: 999999 });
+    }
+  }
+
+  console.log("Starting card loop...", watchEvents);
+
+  cardWatchLoop(watchEvents);
 };
 
 //----------------------------------------------------------------
 // General Grind
 //----------------------------------------------------------------
+
+numActions = () => {
+  let actionsBox = document.querySelector('img[aria-label="actions"]')
+    .parentElement.parentElement;
+  let actionsText = actionsBox.querySelector(
+    "div.item__desc > div"
+  ).textContent;
+
+  return parseInt(actionsText.match(/(\d+)\/\d+/)[1]);
+};
 
 branchLoop = (branchId) => {
   return new Promise(async (resolve) => {
@@ -975,6 +1084,25 @@ branchLoop = (branchId) => {
     tryAgainOrOnwards();
     resolve();
   });
+};
+
+grindForever = async () => {
+  let reserveActions = parseInt($("#grind-amount").val());
+
+  if (!reserveActions || reserveActions == 0) {
+    reserveActions = 10;
+  }
+
+  const branchId = $("#grind-input").val();
+
+  while (true) {
+    if (numActions() > reserveActions) {
+      await branchLoop(branchId);
+      console.log(`played branch ${branchId}, ${numActions()} actions left`);
+    }
+
+    await sleep(5000);
+  }
 };
 
 grind = async (branchId, n) => {
@@ -996,14 +1124,8 @@ grindAll = async (branchId, grindAmt) => {
 getGrindAmount = () => {
   let grindAmt = parseInt($("#grind-amount").val());
 
-  let actionsBox = document.querySelector('img[aria-label="actions"]')
-    .parentElement.parentElement;
-  let actionsText = actionsBox.querySelector(
-    "div.item__desc > div"
-  ).textContent;
-
   if (!grindAmt || grindAmt == 0) {
-    grindAmt = parseInt(actionsText.match(/(\d+)\/\d+/)[1]);
+    grindAmt = numActions();
   }
 
   return grindAmt;
@@ -1057,12 +1179,15 @@ createHelperEls = () => {
     <br>
       <select name="grinds" id="grind-select">
         <option value="grindAllMarked">Generic</option>
+        <option value="grindForever">Forever</option>
         <option value="heliconGrind">Helicon House</option>
         <option value="boxGrind">Affair of the Box</option>
         <option value="contraptionGrind">Whirring Contraption</option>
         <option value="sharkGrind">Pinewood Shark</option>
         <option value="nightmareAssistGrind">Nightmares</option>
         <option value="suspicionGrind">Suspicion</option>
+        <option value="researchGrind">Research</option>
+        <option value="newEolithGrind">Eolith Research</option>
       </select>
       <button class="button--primary" onclick="doGrind()">Grind</button>
 
@@ -1072,7 +1197,31 @@ createHelperEls = () => {
   document.querySelector(".items--list").insertAdjacentElement("afterEnd", div);
 };
 
+window.researchGrind = () => {
+  const amt = getGrindAmount();
+
+  startCardLoop(researchEvents, amt);
+};
+
+window.newEolithGrind = async () => {
+  const amt = getGrindAmount();
+
+  console.log(`grinding eolith ${amt} times`)
+
+  for (let i = 0; i < amt; i++) {
+    await newEolithLoop();
+  }
+
+  console.log("done!");
+};
+
 async function helperWatch() {
+  while (!document.querySelector(".candle-container")) {
+    await sleep(1000);
+  }
+
+  console.log("FL loaded, creating helper els");
+
   while (true) {
     await sleep(1000);
     if (!document.querySelector("#grind-select")) {
